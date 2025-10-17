@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
     
     steps:
-      - name: Set up JDK 17
+      - name: Set up JDK 17 (Requerido por SonarScanner)
         uses: actions/setup-java@v4
         with:
           java-version: 17
@@ -24,20 +24,20 @@ jobs:
         with:
           dotnet-version: '6.0.x'
           
-      # PASO CRÍTICO: Instala el Windows Desktop Runtime faltante
+      # PASO CLAVE: Instala el paquete de escritorio para evitar el error NETSDK1127 
       - name: Install .NET 6.0 Windows Desktop Runtime
         shell: powershell
         run: |
-          # Esto resuelve explícitamente el error NETSDK1127 para proyectos Windows Desktop
-          # El 'setup-dotnet' solo instala el SDK base, no el paquete de escritorio.
+          # Asegura que el runtime de escritorio esté disponible para la solución de WinForms/WPF
           dotnet workload install Microsoft.NET.Sdk.WindowsDesktop --sdk-version 6.0.422
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # fetch-depth: 0 es crucial para análisis de "código nuevo" y PRs
           fetch-depth: 0
 
-      # Pasos de cacheo de SonarCloud (dejar como estaban)
+      # Los pasos de Cacheo son correctos y se mantienen
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
@@ -45,42 +45,45 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      - name: Cache SonarQube Cloud scanner
-        id: cache-sonar-scanner
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}\scanner
-          key: ${{ runner.os }}-sonar-scanner
-          restore-keys: ${{ runner.os }}-sonar-scanner
-
       - name: Install SonarQube Cloud scanner
-        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         shell: powershell
-        run: |
-          New-Item -Path "$env:RUNNER_TEMP\scanner" -ItemType Directory -Force
-          dotnet tool install dotnet-sonarscanner --tool-path "$env:RUNNER_TEMP\scanner"
+        run: dotnet tool install dotnet-sonarscanner --global --version 6.0.0 # Usamos --global para simplificar
 
-      # PASO CORREGIDO: Build y Análisis usando dotnet
-      - name: Build and analyze
+      # --- PASOS DE ANÁLISIS Y TESTS CORREGIDOS ---
+      - name: Run analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
-          $scannerPath = "$env:RUNNER_TEMP\scanner\dotnet-sonarscanner"
+          $scanner = "dotnet-sonarscanner"
           $solutionPath = "ReporteGasto\ReporteGasto.sln"
+          $projectName = "Rubidescalz_reportegasto"
+          $orgName = "rubidescalz"
           
-          # 1. Inicia el análisis
-          Write-Host "Inicia el análisis de SonarScanner..."
-          & $scannerPath begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token=$env:SONAR_TOKEN /d:sonar.host.url="https://sonarcloud.io"
-
-          # 2. Restaura las dependencias (Necesario para paquetes NuGet, aunque el workload arregla el targeting pack)
-          Write-Host "Restaurando paquetes NuGet y dependencias (dotnet restore)..."
+          # 1. INICIA el análisis y activa la recopilación de Cobertura
+          Write-Host "1. Inicia el análisis de SonarScanner..."
+          & $scanner begin `
+            /k:"$projectName" `
+            /o:"$orgName" `
+            /d:sonar.token="$env:SONAR_TOKEN" `
+            /d:sonar.host.url="https://sonarcloud.io" `
+            /d:sonar.cs.opencover.reportsPaths="**\TestResults\coverage.opencover.xml" # CRÍTICO: Aquí le decimos dónde buscar el informe
+          
+          # 2. Restaura y Compila (Mantenemos tu lógica)
+          Write-Host "2. Restaurando y Compilando la solución..."
           dotnet restore $solutionPath
-
-          # 3. Compila la solución (Debe funcionar ahora con el Desktop Runtime instalado)
-          Write-Host "Compilando la solución (dotnet build)..."
           dotnet build $solutionPath --configuration Release --no-restore
           
-          # 4. Finaliza el análisis
-          Write-Host "Finaliza el análisis de SonarScanner..."
-          & $scannerPath end /d:sonar.token=$env:SONAR_TOKEN
+          # 3. EJECUTA TESTS Y GENERA INFORME DE COBERTURA
+          # Debes tener al menos un proyecto de tests que Sonar pueda analizar (ej: "ReporteGasto.Tests.csproj")
+          Write-Host "3. Ejecutando tests y generando informe de cobertura..."
+          dotnet test $solutionPath `
+            --no-build `
+            --configuration Release `
+            /p:CollectCoverage=true `
+            /p:CoverletOutputFormat="opencover" `
+            /p:CoverletOutput="./TestResults/coverage.opencover.xml" # CRÍTICO: Se guarda el informe aquí
+            
+          # 4. FINALIZA el análisis (SonarCloud lee el informe Coverlet que acabamos de generar)
+          Write-Host "4. Finaliza el análisis de SonarScanner..."
+          & $scanner end /d:sonar.token="$env:SONAR_TOKEN"
