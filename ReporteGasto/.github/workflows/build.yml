@@ -61,8 +61,11 @@ jobs:
           # Inicia el análisis
           & $scannerPath begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token=$env:SONAR_TOKEN
         
-          # Compila con MSBuild (parámetros separados)
+          # Compila con MSBuild
           & $msbuildPath $solutionPath /p:Configuration=Release /p:Platform="Any CPU" /p:VisualStudioVersion=17.0
         
           # Finaliza el análisis
           & $scannerPath end /d:sonar.token=$env:SONAR_TOKEN
+
+
+
