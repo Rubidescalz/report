@@ -24,12 +24,13 @@ jobs:
         with:
           dotnet-version: '6.0.x'
           
-      # PASO CLAVE: Instala el paquete de escritorio para evitar el error NETSDK1127 
+      # PASO CORREGIDO: Instala el paquete de escritorio para WinForms/WPF.
+      # Se eliminó el parámetro --sdk-version que causaba el error.
       - name: Install .NET 6.0 Windows Desktop Runtime
         shell: powershell
         run: |
-          # Asegura que el runtime de escritorio esté disponible para la solución de WinForms/WPF
-          dotnet workload install Microsoft.NET.Sdk.WindowsDesktop --sdk-version 6.0.422
+          # Asegura que el runtime de escritorio esté disponible para la solución (WinForms/WPF)
+          dotnet workload install Microsoft.NET.Sdk.WindowsDesktop
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,7 +38,7 @@ jobs:
           # fetch-depth: 0 es crucial para análisis de "código nuevo" y PRs
           fetch-depth: 0
 
-      # Los pasos de Cacheo son correctos y se mantienen
+      # Los pasos de Cacheo se mantienen
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
@@ -47,43 +48,44 @@ jobs:
 
       - name: Install SonarQube Cloud scanner
         shell: powershell
-        run: dotnet tool install dotnet-sonarscanner --global --version 6.0.0 # Usamos --global para simplificar
+        # Instalación global para simplificar el uso en el paso 'Run analysis'
+        run: dotnet tool install dotnet-sonarscanner --global --version 6.0.0
 
-      # --- PASOS DE ANÁLISIS Y TESTS CORREGIDOS ---
+      # --- PASOS DE ANÁLISIS Y TESTS ---
       - name: Run analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
           $scanner = "dotnet-sonarscanner"
-          $solutionPath = "ReporteGasto\ReporteGasto.sln"
+          $solutionPath = "ReporteGasto\ReporteGasto.sln" # VERIFICA ESTA RUTA
           $projectName = "Rubidescalz_reportegasto"
           $orgName = "rubidescalz"
           
-          # 1. INICIA el análisis y activa la recopilación de Cobertura
+          # 1. INICIA el análisis y ACTIVA la recolección de Cobertura
           Write-Host "1. Inicia el análisis de SonarScanner..."
           & $scanner begin `
             /k:"$projectName" `
             /o:"$orgName" `
             /d:sonar.token="$env:SONAR_TOKEN" `
             /d:sonar.host.url="https://sonarcloud.io" `
-            /d:sonar.cs.opencover.reportsPaths="**\TestResults\coverage.opencover.xml" # CRÍTICO: Aquí le decimos dónde buscar el informe
+            /d:sonar.cs.opencover.reportsPaths="**\TestResults\coverage.opencover.xml" # Indica dónde buscar el informe de cobertura
           
-          # 2. Restaura y Compila (Mantenemos tu lógica)
+          # 2. Restaura y Compila
           Write-Host "2. Restaurando y Compilando la solución..."
           dotnet restore $solutionPath
           dotnet build $solutionPath --configuration Release --no-restore
           
           # 3. EJECUTA TESTS Y GENERA INFORME DE COBERTURA
-          # Debes tener al menos un proyecto de tests que Sonar pueda analizar (ej: "ReporteGasto.Tests.csproj")
+          # Este paso requiere que tu solución tenga un proyecto de Tests Unitarios.
           Write-Host "3. Ejecutando tests y generando informe de cobertura..."
           dotnet test $solutionPath `
             --no-build `
             --configuration Release `
             /p:CollectCoverage=true `
             /p:CoverletOutputFormat="opencover" `
-            /p:CoverletOutput="./TestResults/coverage.opencover.xml" # CRÍTICO: Se guarda el informe aquí
+            /p:CoverletOutput="./TestResults/coverage.opencover.xml" # Guarda el informe en la ruta esperada
             
-          # 4. FINALIZA el análisis (SonarCloud lee el informe Coverlet que acabamos de generar)
+          # 4. FINALIZA el análisis (SonarCloud lee todos los datos)
           Write-Host "4. Finaliza el análisis de SonarScanner..."
           & $scanner end /d:sonar.token="$env:SONAR_TOKEN"
