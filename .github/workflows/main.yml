@@ -22,6 +22,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Instala el SDK de .NET 6 y el runtime de escritorio
+      - name: Install .NET 6 SDK (Windows Desktop)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+      - name: Verify .NET installation
+        run: dotnet --info
+
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
@@ -44,7 +52,7 @@ jobs:
           New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
           dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
 
-      - name: Build and analyze (.NET Framework)
+      - name: Build and analyze (.NET 6 WinForms)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
@@ -52,16 +60,9 @@ jobs:
           Write-Host '🔍 Iniciando análisis SonarQube...'
           & "${{ runner.temp }}\scanner\dotnet-sonarscanner" begin /k:'Rubidescalz_reportegasto' /o:'rubidescalz' /d:sonar.token='${{ secrets.SONAR_TOKEN }}'
 
-          # Detecta automáticamente MSBuild
-          $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
-          if (-not $msbuild) {
-              Write-Host '⚠️ No se encontró MSBuild automáticamente. Usando ruta por defecto...'
-              $msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe'
-          }
-          Write-Host "✅ MSBuild detectado en: $msbuild"
-
-          # Compila la solución
-          Start-Process -FilePath $msbuild -ArgumentList 'ReporteGasto\ReporteGasto.sln', '/p:Configuration=Release' -Wait -NoNewWindow
+          # Compila la solución (usa dotnet build en lugar de MSBuild)
+          dotnet restore "ReporteGasto\ReporteGasto.sln"
+          dotnet build "ReporteGasto\ReporteGasto.sln" --configuration Release --no-restore
 
           # Finaliza el análisis
           & "${{ runner.temp }}\scanner\dotnet-sonarscanner" end /d:sonar.token='${{ secrets.SONAR_TOKEN }}'
