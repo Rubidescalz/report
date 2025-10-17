@@ -55,17 +55,10 @@ jobs:
           $sonarToken = "${{ secrets.SONAR_TOKEN }}"
           
           # Iniciar SonarScanner
-          & $scannerPath begin `
-            /k:"Rubidescalz_reportegasto" `
-            /o:"rubidescalz" `
-            /d:sonar.token="$sonarToken"
+          & $scannerPath @("begin", "/k:Rubidescalz_reportegasto", "/o:rubidescalz", "/d:sonar.token=$sonarToken")
           
           # Compilar con MSBuild
-          & $msbuildPath $solutionPath `
-            /p:Configuration=Release `
-            /p:Platform=AnyCPU `
-            /p:VisualStudioVersion=17.0
+          & $msbuildPath @($solutionPath, "/p:Configuration=Release", "/p:Platform=AnyCPU", "/p:VisualStudioVersion=17.0")
           
           # Finalizar SonarScanner
-          & $scannerPath end `
-            /d:sonar.token="$sonarToken"
+          & $scannerPath @("end", "/d:sonar.token=$sonarToken")
