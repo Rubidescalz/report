@@ -5,6 +5,7 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
   build:
     name: Build and analyze
@@ -15,16 +16,19 @@ jobs:
         with:
           java-version: 17
           distribution: 'zulu'
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
-          path: ~\.sonar\cache
+          path: ~\sonar\cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
       - name: Cache SonarQube Cloud scanner
         id: cache-sonar-scanner
         uses: actions/cache@v4
@@ -32,27 +36,28 @@ jobs:
           path: ${{ runner.temp }}\scanner
           key: ${{ runner.os }}-sonar-scanner
           restore-keys: ${{ runner.os }}-sonar-scanner
+
       - name: Install SonarQube Cloud scanner
         if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         shell: powershell
         run: |
-          New-Item -Path "$env:RUNNER_TEMP\scanner" -ItemType Directory -Force
-          dotnet tool install dotnet-sonarscanner --tool-path "$env:RUNNER_TEMP\scanner"
-      - name: Build and analyze using MSBuild
+          New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
+          dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
+
+      - name: Build and analyze using MSBuild safely
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
-          $scannerPath = "$env:RUNNER_TEMP\scanner\dotnet-sonarscanner"
-          $msbuildPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
-          $solutionPath = "ReporteGasto\ReporteGasto.sln"
-        
-          # Iniciar SonarScanner
-          & $scannerPath begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token=$env:SONAR_TOKEN
-        
-          # Compilar con MSBuild
-          & $msbuildPath "$solutionPath" "/p:Configuration=Release" "/p:Platform=AnyCPU" "/p:VisualStudioVersion=17.0"
-        
-          # Finalizar SonarScanner
-          & $scannerPath end /d:sonar.token=$env:SONAR_TOKEN
+          # Inicia el análisis
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
 
+          # Ruta a MSBuild (Visual Studio 2022 Enterprise)
+          $msbuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+          $solution = "ReporteGasto\ReporteGasto.sln"
+
+          # Ejecutar MSBuild usando Start-Process
+          Start-Process -FilePath $msbuild -ArgumentList $solution, "/p:Configuration=Release" -Wait -NoNewWindow
+
+          # Finalizar el análisis
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
