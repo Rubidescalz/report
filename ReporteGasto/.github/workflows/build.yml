@@ -10,30 +10,34 @@ on:
 jobs:
   build:
     name: Build and analyze
-    # Usar windows-latest es correcto, ya que el proyecto es de escritorio (net6.0-windows)
     runs-on: windows-latest
     
     steps:
-      # Configuración de Java 17 (Requerido por SonarScanner)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: 17
           distribution: 'zulu'
 
-      # Configuración de .NET 6 (Tu proyecto apunta a net6.0)
-      - name: Setup .NET 6
+      - name: Setup .NET 6 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '6.0.x'
+          
+      # PASO CRÍTICO: Instala el Windows Desktop Runtime faltante
+      - name: Install .NET 6.0 Windows Desktop Runtime
+        shell: powershell
+        run: |
+          # Esto resuelve explícitamente el error NETSDK1127 para proyectos Windows Desktop
+          # El 'setup-dotnet' solo instala el SDK base, no el paquete de escritorio.
+          dotnet workload install Microsoft.NET.Sdk.WindowsDesktop --sdk-version 6.0.422
 
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # fetch-depth: 0 es crucial para análisis correctos en SonarCloud
           fetch-depth: 0
 
-      # Pasos de cacheo de SonarCloud (opcionales pero recomendados para velocidad)
+      # Pasos de cacheo de SonarCloud (dejar como estaban)
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
@@ -56,7 +60,7 @@ jobs:
           New-Item -Path "$env:RUNNER_TEMP\scanner" -ItemType Directory -Force
           dotnet tool install dotnet-sonarscanner --tool-path "$env:RUNNER_TEMP\scanner"
 
-      # === PASO CORREGIDO: Build y Análisis con Dotnet ===
+      # PASO CORREGIDO: Build y Análisis usando dotnet
       - name: Build and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -66,20 +70,16 @@ jobs:
           $solutionPath = "ReporteGasto\ReporteGasto.sln"
           
           # 1. Inicia el análisis
-          # Se añade sonar.host.url para robustez
           Write-Host "Inicia el análisis de SonarScanner..."
           & $scannerPath begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token=$env:SONAR_TOKEN /d:sonar.host.url="https://sonarcloud.io"
 
-          # 2. Restaura las dependencias (Soluciona el error NETSDK1127)
+          # 2. Restaura las dependencias (Necesario para paquetes NuGet, aunque el workload arregla el targeting pack)
           Write-Host "Restaurando paquetes NuGet y dependencias (dotnet restore)..."
           dotnet restore $solutionPath
 
-          # 3. Compila la solución (Usando dotnet build para usar el SDK correcto)
+          # 3. Compila la solución (Debe funcionar ahora con el Desktop Runtime instalado)
           Write-Host "Compilando la solución (dotnet build)..."
-          # Usamos --no-restore porque ya lo hicimos arriba.
           dotnet build $solutionPath --configuration Release --no-restore
-          
-          # Si la compilación falla (código de salida != 0), el workflow terminará aquí.
           
           # 4. Finaliza el análisis
           Write-Host "Finaliza el análisis de SonarScanner..."
