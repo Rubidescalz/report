@@ -8,12 +8,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- 🔹 Paquetes NuGet -->
   <ItemGroup>
-    <!-- Si usas librerías externas, agrégalas aquí -->
-    <!-- Ejemplo:
+    <!-- Controles UI -->
     <PackageReference Include="DevExpress.Win" Version="23.2.5" />
     <PackageReference Include="MetroModernUI" Version="1.4.0" />
-    -->
+  </ItemGroup>
+
+  <!-- 🔹 Referencias a otros proyectos internos -->
+  <ItemGroup>
+    <ProjectReference Include="..\Comun\Comun.csproj" />
+    <ProjectReference Include="..\Negocio\Negocio.csproj" />
+    <ProjectReference Include="..\Sistema\Sistema.csproj" />
   </ItemGroup>
 
 </Project>
