@@ -17,6 +17,11 @@ jobs:
           java-version: 17
           distribution: 'zulu'
 
+      - name: Setup .NET 6
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -53,12 +58,11 @@ jobs:
           $msbuildPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
           $solutionPath = "ReporteGasto\ReporteGasto.sln"
         
-          # Iniciar SonarScanner
+          # Inicia el análisis
           & $scannerPath begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token=$env:SONAR_TOKEN
         
-          # Compilar con MSBuild (cada parámetro separado)
+          # Compila con MSBuild (parámetros separados)
           & $msbuildPath $solutionPath /p:Configuration=Release /p:Platform="Any CPU" /p:VisualStudioVersion=17.0
         
-          # Finalizar SonarScanner
+          # Finaliza el análisis
           & $scannerPath end /d:sonar.token=$env:SONAR_TOKEN
-
