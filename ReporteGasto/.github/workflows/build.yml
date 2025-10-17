@@ -1,5 +1,4 @@
 name: SonarQube
-
 on:
   push:
     branches:
@@ -11,81 +10,58 @@ jobs:
   build:
     name: Build and analyze
     runs-on: windows-latest
-    
     steps:
-      - name: Set up JDK 17 (Requerido por SonarScanner)
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: 17
           distribution: 'zulu'
 
-      - name: Setup .NET 6 SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '6.0.x'
-          
-      # --- PASO CORREGIDO FINAL: Usa el ID de Workload más simple 'desktop' ---
-      - name: Install .NET 6.0 Windows Desktop Runtime
-        shell: powershell
-        run: |
-          # El ID de Workload 'desktop' es el más fiable y genérico para esta tarea.
-          Write-Host "Instalando workload 'desktop'..."
-          dotnet workload install desktop
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # fetch-depth: 0 es crucial para análisis de "código nuevo" y PRs
           fetch-depth: 0
 
-      # Los pasos de Cacheo se mantienen
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
-          path: ~\.sonar\cache
+          path: ~\sonar\cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      - name: Install SonarQube Cloud scanner
-        shell: powershell
-        # Instalación global para simplificar el uso en el paso 'Run analysis'
-        run: dotnet tool install dotnet-sonarscanner --global --version 6.0.0
+      - name: Cache SonarQube Cloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
 
-      # --- PASOS DE ANÁLISIS Y TESTS ---
-      - name: Run analysis
+      - name: Install SonarQube Cloud scanner
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
+          dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
+
+      - name: Build and analyze (MSBuild para .NET Framework)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
-          $scanner = "dotnet-sonarscanner"
-          $solutionPath = "ReporteGasto\ReporteGasto.sln" # VERIFICA ESTA RUTA
-          $projectName = "Rubidescalz_reportegasto"
-          $orgName = "rubidescalz"
-          
-          # 1. INICIA el análisis y ACTIVA la recolección de Cobertura
-          Write-Host "1. Inicia el análisis de SonarScanner..."
-          & $scanner begin `
-            /k:"$projectName" `
-            /o:"$orgName" `
-            /d:sonar.token="$env:SONAR_TOKEN" `
-            /d:sonar.host.url="https://sonarcloud.io" `
-            /d:sonar.cs.opencover.reportsPaths="**\TestResults\coverage.opencover.xml" # Indica dónde buscar el informe de cobertura
-          
-          # 2. Restaura y Compila
-          Write-Host "2. Restaurando y Compilando la solución..."
-          dotnet restore $solutionPath
-          dotnet build $solutionPath --configuration Release --no-restore
-          
-          # 3. EJECUTA TESTS Y GENERA INFORME DE COBERTURA
-          # Este paso requiere que tu solución tenga un proyecto de Tests Unitarios.
-          Write-Host "3. Ejecutando tests y generando informe de cobertura..."
-          dotnet test $solutionPath `
-            --no-build `
-            --configuration Release `
-            /p:CollectCoverage=true `
-            /p:CoverletOutputFormat="opencover" `
-            /p:CoverletOutput="./TestResults/coverage.opencover.xml" # Guarda el informe en la ruta esperada
-            
-          # 4. FINALIZA el análisis (SonarCloud lee todos los datos)
-          Write-Host "4. Finaliza el análisis de SonarScanner..."
-          & $scanner end /d:sonar.token="$env:SONAR_TOKEN"
+          Write-Host "🔍 Iniciando análisis SonarQube..."
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+
+          # Buscar automáticamente la ruta de MSBuild instalada
+          $msbuild = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -find MSBuild\**\Bin\MSBuild.exe
+          if (-not $msbuild) {
+              Write-Host "⚠️ No se encontró MSBuild automáticamente. Usando ruta por defecto..."
+              $msbuild = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+          }
+          Write-Host "✅ MSBuild detectado en: $msbuild"
+
+          # Compilar el proyecto
+          Start-Process -FilePath $msbuild -ArgumentList "ReporteGasto\ReporteGasto.sln", "/p:Configuration=Release" -Wait -NoNewWindow
+
+          # Finalizar análisis
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
