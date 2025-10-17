@@ -49,6 +49,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
-          "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" "ReporteGasto\ReporteGasto.sln" /p:Configuration=Release
-          ${{ runner.temp }}\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe' 'ReporteGasto\ReporteGasto.sln' /p:Configuration=Release
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
