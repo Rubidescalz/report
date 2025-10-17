@@ -1,19 +1,77 @@
-<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+name: SonarQube
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+jobs:
+  build:
+    name: Build and analyze
+    runs-on: windows-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'zulu'
 
-  <ItemGroup>
-    <!-- Si usas librerías externas, agrégalas aquí -->
-    <!-- Ejemplo:
-    <PackageReference Include="DevExpress.Win" Version="23.2.5" />
-    <PackageReference Include="MetroModernUI" Version="1.4.0" />
-    -->
-  </ItemGroup>
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-</Project>
+      # 👇 Instala el SDK de .NET correcto (según tu proyecto)
+      # Si usas net8.0-windows, instala 8.x; si usas net6.0-windows, cambia a 6.0.x
+      - name: Install .NET 8 SDK (Windows Desktop)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          include-prerelease: false
+
+      - name: Verify .NET installation
+        run: dotnet --info
+
+      # 🔹 Solución al error NETSDK1127:
+      #   Se instala explícitamente el runtime WindowsDesktop (WinForms/WPF)
+      - name: Ensure WindowsDesktop runtime is available
+        shell: powershell
+        run: |
+          Write-Host '✅ Verificando e instalando runtime WindowsDesktop...'
+          dotnet workload install windowsdesktop --skip-manifest-update
+
+      - name: Cache SonarQube Cloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~\sonar\cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache SonarQube Cloud scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+
+      - name: Install SonarQube Cloud scanner
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
+          dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
+
+      - name: Build and analyze (.NET WinForms)
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        shell: powershell
+        run: |
+          Write-Host '🔍 Iniciando análisis SonarQube...'
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" begin /k:'Rubidescalz_reportegasto' /o:'rubidescalz' /d:sonar.token='${{ secrets.SONAR_TOKEN }}' /d:sonar.scanner.skipJreProvisioning=true
+
+          dotnet restore "ReporteGasto\ReporteGasto.sln"
+          dotnet build "ReporteGasto\ReporteGasto.sln" --configuration Release --no-restore
+
+          & "${{ runner.temp }}\scanner\dotnet-sonarscanner" end /d:sonar.token='${{ secrets.SONAR_TOKEN }}'
