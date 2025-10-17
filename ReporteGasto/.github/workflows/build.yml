@@ -22,7 +22,7 @@ jobs:
       - name: Cache SonarQube Cloud packages
         uses: actions/cache@v4
         with:
-          path: ~\sonar\cache
+          path: ~\.sonar\cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
       - name: Cache SonarQube Cloud scanner
@@ -37,7 +37,7 @@ jobs:
         shell: powershell
         run: |
           New-Item -Path "$env:RUNNER_TEMP\scanner" -ItemType Directory -Force
-          dotnet tool update dotnet-sonarscanner --tool-path "$env:RUNNER_TEMP\scanner"
+          dotnet tool install dotnet-sonarscanner --tool-path "$env:RUNNER_TEMP\scanner"
       - name: Build and analyze using MSBuild
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -46,12 +46,13 @@ jobs:
           $scannerPath = "$env:RUNNER_TEMP\scanner\dotnet-sonarscanner"
           $msbuildPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
           $solutionPath = "ReporteGasto\ReporteGasto.sln"
-         
+        
           # Iniciar SonarScanner
           & $scannerPath begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token=$env:SONAR_TOKEN
-         
+        
           # Compilar con MSBuild
-          & $msbuildPath $solutionPath "/p:Configuration=Release" "/p:Platform=AnyCPU" "/p:VisualStudioVersion=17.0"
-         
+          & $msbuildPath "$solutionPath" "/p:Configuration=Release" "/p:Platform=AnyCPU" "/p:VisualStudioVersion=17.0"
+        
           # Finalizar SonarScanner
           & $scannerPath end /d:sonar.token=$env:SONAR_TOKEN
+
