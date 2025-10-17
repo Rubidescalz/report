@@ -24,13 +24,13 @@ jobs:
         with:
           dotnet-version: '6.0.x'
           
-      # PASO CORREGIDO: Instala el paquete de escritorio para WinForms/WPF.
-      # Se eliminó el parámetro --sdk-version que causaba el error.
+      # --- PASO CORREGIDO FINAL: Usa el ID de Workload más simple 'desktop' ---
       - name: Install .NET 6.0 Windows Desktop Runtime
         shell: powershell
         run: |
-          # Asegura que el runtime de escritorio esté disponible para la solución (WinForms/WPF)
-          dotnet workload install Microsoft.NET.Sdk.WindowsDesktop
+          # El ID de Workload 'desktop' es el más fiable y genérico para esta tarea.
+          Write-Host "Instalando workload 'desktop'..."
+          dotnet workload install desktop
 
       - name: Checkout repository
         uses: actions/checkout@v4
