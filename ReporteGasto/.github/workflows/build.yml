@@ -44,11 +44,17 @@ jobs:
           New-Item -Path ${{ runner.temp }}\scanner -ItemType Directory
           dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\scanner
 
-      - name: Build and analyze (using MSBuild for .NET Framework)
+      - name: Build and analyze using MSBuild
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
           & "${{ runner.temp }}\scanner\dotnet-sonarscanner" begin /k:"Rubidescalz_reportegasto" /o:"rubidescalz" /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
-          & 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe' 'ReporteGasto\ReporteGasto.sln' /p:Configuration=Release
+
+          # Ejecutar MSBuild con Start-Process para evitar errores de comillas
+          $msbuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+          $solution = "ReporteGasto\ReporteGasto.sln"
+          $arguments = "/p:Configuration=Release"
+          Start-Process -FilePath $msbuild -ArgumentList $solution, $arguments -Wait -NoNewWindow
+
           & "${{ runner.temp }}\scanner\dotnet-sonarscanner" end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
